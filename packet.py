@@ -26,6 +26,7 @@ from enum import IntEnum, unique
 from nacl.secret import SecretBox
 from nacl.utils import random as random_bytes
 from nacl.exceptions import CryptoError
+from validate_header import HeaderSkeptic  # anti-forensic validator
 from typing import Optional, Any, Dict
 
 
@@ -159,6 +160,11 @@ class SecurePacket:
         if len(data) < cls.HEADER_SIZE + cls.HMAC_SIZE:
             raise ValueError("Invalid packet: too short.")
 
+        # 🎭 Anti-forensic inspection (raises no exception — just asks questions)
+        _, validation_notes = HeaderSkeptic.question_header(data)
+        if "✅" not in validation_notes:
+            print(f"[🧠 Header Anomaly Detected]\n{validation_notes}\n")  # Optional: log it for your internal ops
+
         header = data[:cls.HEADER_SIZE]
         magic, version, packet_type, flags, nonce, timestamp, payload_len = struct.unpack(cls.HEADER_FORMAT, header)
 
@@ -205,7 +211,7 @@ class SecurePacket:
             skip_compress=True,
             timestamp=timestamp
         )
-
+    
     def get_payload(self) -> bytes:
         return self.payload
 
