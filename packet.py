@@ -1,11 +1,27 @@
 """
-This is the structure of Post-Trust Ephemeral Relay Protocol PTER Packet Module.
-It Includes secure packet handling, encryption, decryption and compression.
+Post-Trust Ephemeral Relay Protocol (PTER) – Secure Packet Module
+Includes secure packet handling, encryption, decryption, compression, and integrity validation via HMAC.
+
+# Updated PTER Packet Structure (with HMAC):
+#
+# +----------------+----------------+----------------+----------------+
+# | Magic (1 byte) | Version (1)    | Type (1)       | Flags (1)      |
+# +----------------+----------------+----------------+----------------+
+# |                Nonce (24 bytes)                                 |
+# +---------------------------------------------------------------+
+# |        Timestamp (8 bytes)         | Payload Length (4 bytes)  |
+# +------------------------------------+--------------------------+
+# |                Ciphertext (variable, encrypted payload)        |
+# +---------------------------------------------------------------+
+# |               HMAC (32 bytes, SHA-256 of ciphertext)           |
+# +---------------------------------------------------------------+
 """
 
 import zlib
 import struct
 import time
+import hmac
+import hashlib
 from enum import IntEnum, unique
 from nacl.secret import SecretBox
 from nacl.utils import random as random_bytes
@@ -64,14 +80,20 @@ class PacketType(IntEnum):
     @classmethod
     def name_from_value(cls, value: int) -> str:
         member = cls._value2member_map_.get(value)
-        if member is not None:
-            return member.name
-        return f"UNKNOWN_0x{value:02X}"
-
+        return member.name if member else f"UNKNOWN_0x{value:02X}"
 
     @classmethod
     def has_value(cls, value: int) -> bool:
         return value in cls._value2member_map_
+
+
+def compute_hmac(ciphertext: bytes, key: bytes) -> bytes:
+    return hmac.new(key, ciphertext, hashlib.sha256).digest()
+
+
+def verify_hmac(ciphertext: bytes, key: bytes, received_hmac: bytes) -> bool:
+    expected = compute_hmac(ciphertext, key)
+    return hmac.compare_digest(expected, received_hmac)
 
 
 class SecurePacket:
@@ -79,6 +101,7 @@ class SecurePacket:
     VERSION = 1
     HEADER_FORMAT = "!BBBB24sQI"  # magic, version, type, flags, nonce, timestamp, payload_len
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
+    HMAC_SIZE = 32  # SHA-256 digest
 
     def __init__(
         self,
@@ -99,7 +122,7 @@ class SecurePacket:
         self.is_compressed = compress
         self.timestamp = timestamp or int(time.time())
         self.version = self.VERSION
-        self.flags = 0x00  # Reserved for future use
+        self.flags = 0x00
 
         if compress and not skip_compress:
             payload = zlib.compress(payload)
@@ -112,7 +135,8 @@ class SecurePacket:
         self.box = SecretBox(session_key)
 
         self.ciphertext = self.box.encrypt(payload, self.nonce).ciphertext
-        self.payload = payload  # Save raw or compressed data
+        self.hmac = compute_hmac(self.ciphertext, self.session_key)
+        self.payload = payload
 
     def to_bytes(self) -> bytes:
         header = struct.pack(
@@ -125,14 +149,14 @@ class SecurePacket:
             self.timestamp,
             len(self.ciphertext)
         )
-        return header + self.ciphertext
+        return header + self.ciphertext + self.hmac
 
     def hex_dump(self) -> str:
         return self.to_bytes().hex()
 
     @classmethod
     def from_bytes(cls, data: bytes, session_key: bytes) -> 'SecurePacket':
-        if len(data) < cls.HEADER_SIZE:
+        if len(data) < cls.HEADER_SIZE + cls.HMAC_SIZE:
             raise ValueError("Invalid packet: too short.")
 
         header = data[:cls.HEADER_SIZE]
@@ -140,19 +164,24 @@ class SecurePacket:
 
         if magic != cls.MAGIC_BYTE:
             raise ValueError(f"Invalid magic byte: {hex(magic)}")
-
         if version != cls.VERSION:
-            raise ValueError(f"Unsupported protocol version: {version}, expected: {cls.VERSION}")
-
+            raise ValueError(f"Unsupported protocol version: {version}")
         if flags != 0x00:
-            raise ValueError(f"Unexpected flags set: 0x{flags:02X} — flags are currently reserved and must be zero.")
+            raise ValueError(f"Unexpected flags set: 0x{flags:02X}")
 
-        if len(session_key) != SecretBox.KEY_SIZE:
-            raise ValueError("Session key must be 32 bytes.")
+        ciphertext_start = cls.HEADER_SIZE
+        ciphertext_end = ciphertext_start + payload_len
+        hmac_start = ciphertext_end
+        hmac_end = hmac_start + cls.HMAC_SIZE
 
-        ciphertext = data[cls.HEADER_SIZE:cls.HEADER_SIZE + payload_len]
-        if len(ciphertext) != payload_len:
-            raise ValueError("Payload length mismatch.")
+        if len(data) < hmac_end:
+            raise ValueError("Truncated packet or missing HMAC.")
+
+        ciphertext = data[ciphertext_start:ciphertext_end]
+        received_hmac = data[hmac_start:hmac_end]
+
+        if not verify_hmac(ciphertext, session_key, received_hmac):
+            raise ValueError("HMAC verification failed. Packet integrity compromised.")
 
         box = SecretBox(session_key)
         try:
@@ -188,5 +217,6 @@ class SecurePacket:
             "version": self.version,
             "compressed": self.is_compressed,
             "length": len(self.payload),
-            "nonce": self.nonce.hex()
+            "nonce": self.nonce.hex(),
+            "hmac": self.hmac.hex(),
         }

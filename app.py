@@ -4,7 +4,7 @@ import time
 from packet import SecurePacket, PacketType
 from handshake import perform_handshake, PEER_IP, PEER_PORT, LISTEN_PORT
 
-MESSAGE = "⚡️ This is a secure TantraMessage ⚡️".encode('utf-8')  # ✅ Valid UTF-8
+MESSAGE = "⚡️ This is a Message from PTER Protocol ⚡️".encode('utf-8')  # ✅ Valid UTF-8
 
 # === SENDER FUNCTION ===
 def send_packet(ip: str, port: int, message: bytes) -> None:
