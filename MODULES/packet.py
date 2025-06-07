@@ -26,7 +26,7 @@ from enum import IntEnum, unique
 from nacl.secret import SecretBox
 from nacl.utils import random as random_bytes
 from nacl.exceptions import CryptoError
-from validate_header import HeaderSkeptic  # anti-forensic validator
+from .validate_header import HeaderSkeptic  # anti-forensic validator
 from typing import Optional, Any, Dict
 
 
