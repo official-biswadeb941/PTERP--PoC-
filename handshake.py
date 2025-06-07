@@ -7,12 +7,7 @@ import base64
 from typing import Optional 
 from nacl.public import PrivateKey, PublicKey, Box
 
-
-# === CONFIG ===
-PEER_IP: str = "192.168.1.9"   # Update to match peer IP
-PEER_PORT: int = 6500
-LISTEN_PORT: int = 6501
-MAGIC: str = "🧿TANTRA2025🧿"
+MAGIC: str = "GET / HTTP/3.0\r\nHost: google.com\r\nUser-Agent: curl/8.1.0\r\n\r\n"
 
 # === UTILS ===
 def generate_nonce() -> str:
@@ -100,7 +95,7 @@ def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -
 
 
 # === SERVER ROLE ===
-def server_mode() -> None:
+def server_mode(LISTEN_PORT: int):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", LISTEN_PORT))
         s.listen()
@@ -116,7 +111,7 @@ def server_mode() -> None:
             ).start()
 
 # === CLIENT ROLE ===
-def client_mode() -> None:
+def client_mode(PEER_IP: str, PEER_PORT: int):
     while True:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
