@@ -13,7 +13,7 @@ from MODULES.handshake import perform_handshake
 PEER_IP: str = "192.168.1.9"  # 🔧 Set to your peer's IP
 PEER_PORT: int = 6500
 LISTEN_PORT: int = 6501
-MESSAGE = "⚡️ This is a Message from PTER Protocol ⚡️".encode('utf-8')  # ✅ Valid UTF-8
+MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ " * 16384).encode('utf-8')  # ≈ 1MB
 
 # === GLOBAL STATE ===
 running = True

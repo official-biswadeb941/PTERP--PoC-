@@ -30,7 +30,7 @@ from collections import OrderedDict
 from threading import RLock
 from typing import Optional, Any, Dict, Tuple
 
-from sw_arq.arq import Sender  # Imported from core.py
+from .sw_arq.arq import Sender  # Imported from core.py
 from .validate_header import HeaderSkeptic
 
 DEFAULT_WINDOW_SIZE = 8
