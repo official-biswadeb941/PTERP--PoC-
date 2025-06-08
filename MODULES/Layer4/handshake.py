@@ -4,8 +4,9 @@ import time
 import hashlib
 import secrets
 import base64
-from typing import Optional 
-from nacl.public import PrivateKey, PublicKey, Box
+from typing import Optional
+
+from MODULES.Utils.crypto import EphemeralKeyPair, derive_shared_secret, hkdf_derive
 
 MAGIC: str = "GET / HTTP/3.0\r\nHost: google.com\r\nUser-Agent: curl/8.1.0\r\n\r\n"
 
@@ -20,9 +21,8 @@ def generate_hash(timestamp: str, nonce: str) -> str:
 def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -> Optional[bytes]:
     try:
         # Generate ephemeral key pair
-        sk = PrivateKey.generate()
-        pk = sk.public_key
-        pk_b64 = base64.b64encode(bytes(pk)).decode()
+        eph = EphemeralKeyPair(verbose=True)
+        pk_b64 = base64.b64encode(eph.get_public_bytes()).decode()
 
         if initiator:
             # Send: MAGIC | timestamp | nonce | base64(pubkey)
@@ -31,7 +31,7 @@ def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -
             message = f"{MAGIC}|{timestamp}|{nonce}|{pk_b64}"
             conn.sendall(message.encode())
 
-            # Receive: digest | base64(pubkey)
+            # Receive: digest | base64(peer_pubkey)
             data = conn.recv(1024)
             if not data:
                 return None
@@ -47,14 +47,15 @@ def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -
                 print(f"❌ Hash mismatch from {addr}")
                 return None
 
-            peer_pk = PublicKey(base64.b64decode(peer_pk_b64))
-            box = Box(sk, peer_pk)
-            shared_session_key = box.shared_key()
+            peer_pub_bytes = base64.b64decode(peer_pk_b64)
+            shared_secret = derive_shared_secret(eph.get_private_bytes(), peer_pub_bytes, verbose=True)
+            salt = secrets.token_bytes(16)
+            session_key = hkdf_derive(shared_secret, salt, verbose=True)
 
-            # Final ACK
             conn.sendall(b"ACK::OK")
             print(f"🤝 Handshake completed with {addr}")
-            return shared_session_key
+            eph.zeroize()
+            return session_key
 
         else:
             # Receive: MAGIC | timestamp | nonce | base64(pubkey)
@@ -72,19 +73,20 @@ def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -
                 conn.sendall(b"REJECT::MAGIC")
                 return None
 
-            # Derive digest and send back
+            peer_pub_bytes = base64.b64decode(peer_pk_b64)
             digest = generate_hash(timestamp, nonce)[:16]
-            peer_pk = PublicKey(base64.b64decode(peer_pk_b64))
             reply = f"{digest}|{pk_b64}"
             conn.sendall(reply.encode())
 
             # Wait for ACK
             ack = conn.recv(1024)
             if ack and ack.decode() == "ACK::OK":
-                box = Box(sk, peer_pk)
-                shared_session_key = box.shared_key()
+                shared_secret = derive_shared_secret(eph.get_private_bytes(), peer_pub_bytes, verbose=True)
+                salt = secrets.token_bytes(16)
+                session_key = hkdf_derive(shared_secret, salt, verbose=True)
                 print(f"🤝 Handshake completed with {addr}")
-                return shared_session_key
+                eph.zeroize()
+                return session_key
             else:
                 print(f"❌ No ACK from {addr}")
                 return None
@@ -127,15 +129,15 @@ def client_mode(PEER_IP: str, PEER_PORT: int):
 def handle_connection(conn: socket.socket, addr: str, initiator: bool) -> None:
     session_key = perform_handshake(conn, addr, initiator)
     if session_key:
-        # You should now pass session_key to your SecurePacket handler
         print(f"[🔑] Session key established with {addr}: {session_key.hex()}")
+        # pass this key to the next module for secure comms
     else:
         print(f"[❌] Handshake failed with {addr}")
 
 # === MAIN ===
 def main() -> None:
-    threading.Thread(target=server_mode, daemon=True).start()
-    threading.Thread(target=client_mode).start()
+    threading.Thread(target=server_mode, args=(4444,), daemon=True).start()
+    threading.Thread(target=client_mode, args=("127.0.0.1", 4444)).start()
 
 if __name__ == "__main__":
     main()
