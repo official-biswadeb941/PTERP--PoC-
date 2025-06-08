@@ -1,8 +1,8 @@
 """
-Post-Trust Ephemeral Relay Protocol (PTER) – Secure Packet Module
+Below Packet Structure & Code is the idea of Post-Trust Ephemeral Relay Protocol (PTER). 
 Includes secure packet handling, encryption, decryption, compression, and integrity validation via HMAC.
 
-# Updated PTER Packet Structure (with HMAC):
+#PTER Packet Structure:
 #
 # +----------------+----------------+----------------+----------------+
 # | Magic (1 byte) | Version (1)    | Type (1)       | Flags (1)      |
@@ -26,8 +26,11 @@ from enum import IntEnum, unique
 from nacl.secret import SecretBox
 from nacl.utils import random as random_bytes
 from nacl.exceptions import CryptoError
-from .validate_header import HeaderSkeptic  # anti-forensic validator
-from typing import Optional, Any, Dict
+from collections import OrderedDict
+from threading import RLock
+from typing import Optional, Any, Dict, Tuple
+
+from .validate_header import HeaderSkeptic
 
 
 @unique
@@ -97,12 +100,48 @@ def verify_hmac(ciphertext: bytes, key: bytes, received_hmac: bytes) -> bool:
     return hmac.compare_digest(expected, received_hmac)
 
 
+class ReplayProtector:
+    def __init__(self, max_entries: int = 5000, max_age: float = 60.0) -> None:
+        self.max_entries: int = max_entries
+        self.max_age: float = max_age
+        self.lock = RLock()
+        self.cache: OrderedDict[Tuple[bytes, int], float] = OrderedDict()
+
+    def _purge_expired(self) -> None:
+        now = time.time()
+        keys_to_delete: list[Tuple[bytes, int]] = []
+
+        with self.lock:
+            for (nonce, ts), inserted_at in list(self.cache.items()):
+                if now - inserted_at > self.max_age:
+                    keys_to_delete.append((nonce, ts))
+                else:
+                    break
+
+            for key in keys_to_delete:
+                self.cache.pop(key, None)
+
+    def seen(self, nonce: bytes, timestamp: int) -> bool:
+        key: Tuple[bytes, int] = (nonce, timestamp)
+        now = time.time()
+
+        with self.lock:
+            self._purge_expired()
+            if key in self.cache:
+                return True
+            if len(self.cache) >= self.max_entries:
+                self.cache.popitem(last=False)
+            self.cache[key] = now
+            return False
+
+
 class SecurePacket:
     MAGIC_BYTE = 0xAB
     VERSION = 1
     HEADER_FORMAT = "!BBBB24sQI"  # magic, version, type, flags, nonce, timestamp, payload_len
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
     HMAC_SIZE = 32  # SHA-256 digest
+    replay_protector = ReplayProtector()
 
     def __init__(
         self,
@@ -160,10 +199,9 @@ class SecurePacket:
         if len(data) < cls.HEADER_SIZE + cls.HMAC_SIZE:
             raise ValueError("Invalid packet: too short.")
 
-        # 🎭 Anti-forensic inspection (raises no exception — just asks questions)
         _, validation_notes = HeaderSkeptic.question_header(data)
         if "✅" not in validation_notes:
-            print(f"[🧠 Header Anomaly Detected]\n{validation_notes}\n")  # Optional: log it for your internal ops
+            print(f"[\U0001f9e0 Header Anomaly Detected]\n{validation_notes}\n")
 
         header = data[:cls.HEADER_SIZE]
         magic, version, packet_type, flags, nonce, timestamp, payload_len = struct.unpack(cls.HEADER_FORMAT, header)
@@ -174,6 +212,9 @@ class SecurePacket:
             raise ValueError(f"Unsupported protocol version: {version}")
         if flags != 0x00:
             raise ValueError(f"Unexpected flags set: 0x{flags:02X}")
+
+        if cls.replay_protector.seen(nonce, timestamp):
+            raise ValueError("Replay detected: nonce/timestamp pair has already been seen.")
 
         ciphertext_start = cls.HEADER_SIZE
         ciphertext_end = ciphertext_start + payload_len
@@ -211,7 +252,7 @@ class SecurePacket:
             skip_compress=True,
             timestamp=timestamp
         )
-    
+
     def get_payload(self) -> bytes:
         return self.payload
 
