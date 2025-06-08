@@ -21,7 +21,7 @@ def generate_hash(timestamp: str, nonce: str) -> str:
 def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -> Optional[bytes]:
     try:
         # Generate ephemeral key pair
-        eph = EphemeralKeyPair(verbose=True)
+        eph = EphemeralKeyPair(verbose=False)
         pk_b64 = base64.b64encode(eph.get_public_bytes()).decode()
 
         if initiator:
@@ -48,9 +48,9 @@ def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -
                 return None
 
             peer_pub_bytes = base64.b64decode(peer_pk_b64)
-            shared_secret = derive_shared_secret(eph.get_private_bytes(), peer_pub_bytes, verbose=True)
+            shared_secret = derive_shared_secret(eph.get_private_bytes(), peer_pub_bytes, verbose=False)
             salt = secrets.token_bytes(16)
-            session_key = hkdf_derive(shared_secret, salt, verbose=True)
+            session_key = hkdf_derive(shared_secret, salt, verbose=False)
 
             conn.sendall(b"ACK::OK")
             print(f"🤝 Handshake completed with {addr}")
@@ -81,9 +81,9 @@ def perform_handshake(conn: socket.socket, addr: str, initiator: bool = False) -
             # Wait for ACK
             ack = conn.recv(1024)
             if ack and ack.decode() == "ACK::OK":
-                shared_secret = derive_shared_secret(eph.get_private_bytes(), peer_pub_bytes, verbose=True)
+                shared_secret = derive_shared_secret(eph.get_private_bytes(), peer_pub_bytes, verbose=False)
                 salt = secrets.token_bytes(16)
-                session_key = hkdf_derive(shared_secret, salt, verbose=True)
+                session_key = hkdf_derive(shared_secret, salt, verbose=False)
                 print(f"🤝 Handshake completed with {addr}")
                 eph.zeroize()
                 return session_key
