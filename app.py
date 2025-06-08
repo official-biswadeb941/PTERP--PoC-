@@ -4,6 +4,7 @@ import time
 import signal
 import sys
 import types
+import struct
 from typing import Optional
 
 from MODULES.Layer4.packet import SecurePacket, PacketType
@@ -13,7 +14,7 @@ from MODULES.Layer4.handshake import perform_handshake
 PEER_IP: str = "192.168.1.9"  # 🔧 Set to your peer's IP
 PEER_PORT: int = 6500
 LISTEN_PORT: int = 6501
-MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ ").encode('utf-8')  # ≈ 1MB
+MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ " * 10000).encode('utf-8')  # ≈ 1MB
 
 # === GLOBAL STATE ===
 running = True
@@ -60,8 +61,13 @@ def send_packet(ip: str, port: int, message: bytes) -> None:
                 return
 
             packet = SecurePacket(PacketType.MESSAGE, message, session_key, compress=True)
-            s.sendall(packet.to_bytes())
-            print(f"[✔] Sent secure packet to {ip}:{port}")
+            packet_data = packet.to_bytes()
+
+            # Prefix with 4-byte big-endian length
+            packet_length = struct.pack(">I", len(packet_data))
+            s.sendall(packet_length + packet_data)
+
+            print(f"[✔] Sent secure packet to {ip}:{port} ({len(packet_data)} bytes)")
     except Exception as e:
         print(f"[🚨] Error sending packet to {ip}:{port} - {e}")
 
@@ -76,11 +82,29 @@ def receive_packet(conn: socket.socket, addr: str) -> None:
             print(f"[x] Handshake failed with {addr}")
             return
 
-        data = conn.recv(4096)
-        if not data:
-            print(f"[x] No data received from {addr}")
+        # Step 1: Read 4-byte length prefix
+        header = conn.recv(4)
+        if len(header) < 4:
+            print(f"[x] Incomplete header from {addr}")
             return
 
+        packet_length = struct.unpack(">I", header)[0]
+        if VERBOSE:
+            print(f"[🔍] Expecting packet of size {packet_length} bytes from {addr}")
+
+        # Step 2: Read full packet data
+        data = b""
+        while len(data) < packet_length:
+            chunk = conn.recv(min(4096, packet_length - len(data)))
+            if not chunk:
+                break
+            data += chunk
+
+        if len(data) != packet_length:
+            print(f"[x] Incomplete packet from {addr}: Expected {packet_length}, got {len(data)}")
+            return
+
+        # Step 3: Process the secure packet
         packet = SecurePacket.from_bytes(data, session_key)
         payload = packet.get_payload()
         payload_size = len(payload)
@@ -90,7 +114,7 @@ def receive_packet(conn: socket.socket, addr: str) -> None:
             print(f"[📦] Packet Size from {addr}: {payload_size} bytes ({payload_size / (1024 * 1024):.2f} MB)")
             print(f"[📊] Total Received: {total_received_bytes} bytes ({total_received_bytes / (1024 * 1024):.2f} MB)")
 
-        print(f"[📥] Received from {addr}: {payload.decode()}")
+        print(f"[📥] Received from {addr}: {payload.decode(errors='ignore')}")
 
     except Exception as e:
         print(f"[🚨] Packet processing error from {addr}: {e}")
