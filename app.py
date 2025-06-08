@@ -19,8 +19,8 @@ MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ " * 10000).encode
 # === GLOBAL STATE ===
 running = True
 server_socket: Optional[socket.socket] = None
-VERBOSE = True  # 🐛 Toggle verbose output
-total_received_bytes = 0  # 📦 Running byte counter
+VERBOSE = True
+total_received_bytes = 0
 
 
 # === SIGNAL HANDLER ===
@@ -41,10 +41,10 @@ def signal_handler(sig: int, _: Optional[types.FrameType]) -> None:
 
 
 # Register signal handlers
-signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
-signal.signal(signal.SIGTERM, signal_handler)  # kill
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 if sys.platform == "win32":
-    signal.signal(signal.SIGBREAK, signal_handler)  # Ctrl+Break (Windows only)
+    signal.signal(signal.SIGBREAK, signal_handler)
 
 
 # === SENDER FUNCTION ===
@@ -64,10 +64,11 @@ def send_packet(ip: str, port: int, message: bytes) -> None:
             packet_data = packet.to_bytes()
 
             # Prefix with 4-byte big-endian length
-            packet_length = struct.pack(">I", len(packet_data))
-            s.sendall(packet_length + packet_data)
+            length_prefix = struct.pack(">I", len(packet_data))
+            s.sendall(length_prefix + packet_data)
 
             print(f"[✔] Sent secure packet to {ip}:{port} ({len(packet_data)} bytes)")
+
     except Exception as e:
         print(f"[🚨] Error sending packet to {ip}:{port} - {e}")
 
@@ -82,7 +83,7 @@ def receive_packet(conn: socket.socket, addr: str) -> None:
             print(f"[x] Handshake failed with {addr}")
             return
 
-        # Step 1: Read 4-byte length prefix
+        # Read the 4-byte length prefix
         header = conn.recv(4)
         if len(header) < 4:
             print(f"[x] Incomplete header from {addr}")
@@ -92,7 +93,7 @@ def receive_packet(conn: socket.socket, addr: str) -> None:
         if VERBOSE:
             print(f"[🔍] Expecting packet of size {packet_length} bytes from {addr}")
 
-        # Step 2: Read full packet data
+        # Read full packet data based on the length
         data = b""
         while len(data) < packet_length:
             chunk = conn.recv(min(4096, packet_length - len(data)))
@@ -101,10 +102,10 @@ def receive_packet(conn: socket.socket, addr: str) -> None:
             data += chunk
 
         if len(data) != packet_length:
-            print(f"[x] Incomplete packet from {addr}: Expected {packet_length}, got {len(data)}")
+            print(f"[x] Incomplete packet from {addr}: expected {packet_length}, got {len(data)}")
             return
 
-        # Step 3: Process the secure packet
+        # Process the secure packet
         packet = SecurePacket.from_bytes(data, session_key)
         payload = packet.get_payload()
         payload_size = len(payload)
@@ -149,7 +150,7 @@ def server_mode(listen_port: int) -> None:
 def client_mode(peer_ip: str, peer_port: int) -> None:
     while running:
         send_packet(peer_ip, peer_port, MESSAGE)
-        time.sleep(10)  # Adjustable send interval
+        time.sleep(10)
 
 
 # === MAIN ===
