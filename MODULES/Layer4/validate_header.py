@@ -16,7 +16,7 @@ except ImportError:
 
 
 class HeaderSkeptic:
-    HEADER_FORMAT = "!BBBB24sQII"
+    HEADER_FORMAT = "!BBBB24sQII"  # Updated to include digest_len (or future extension)
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
     EXPECTED_MAGIC = 0xAB
     EXPECTED_VERSION = 0x01
@@ -28,11 +28,18 @@ class HeaderSkeptic:
             return False, f"[❓] Curiously short — only {len(packet)} bytes. Where did the rest go?"
 
         try:
-            magic, version, ptype, flags, nonce, timestamp, payload_len = struct.unpack(
-                cls.HEADER_FORMAT, packet[:cls.HEADER_SIZE]
-            )
-        except struct.error:
-            return False, "[⚠️] Structural fatigue detected. The packet resists being interpreted by conventional means."
+            (
+                magic,
+                version,
+                ptype,
+                flags,
+                nonce,
+                timestamp,
+                payload_len,
+                digest_len
+            ) = struct.unpack(cls.HEADER_FORMAT, packet[:cls.HEADER_SIZE])
+        except struct.error as e:
+            return False, f"[⚠️] Structural fatigue detected: {str(e)}."
 
         questions: List[str] = []
 
@@ -82,6 +89,12 @@ class HeaderSkeptic:
             questions.append(
                 f"[📦] An empty ciphered box? Payload length says {payload_len}."
             )
+
+        # Digest length sanity check
+        if digest_len == 0:
+            questions.append("[🧊] Digest length is zero — no checksum rune was engraved.")
+        elif digest_len > 64:
+            questions.append(f"[🧠] Digest length unusually large ({digest_len}). Are we hashing gods or garbage?")
 
         # Nonce check
         if nonce == b"\x00" * 24:
