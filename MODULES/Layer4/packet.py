@@ -139,7 +139,7 @@ class ReplayProtector:
 class SecurePacket:
     MAGIC_BYTE = 0xAB
     VERSION = 1
-    HEADER_FORMAT = "!BBBB24sQII"  # Added TTL as final int
+    HEADER_FORMAT = "!BBBB24sQII"
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
     HMAC_SIZE = 32
     replay_protector = ReplayProtector()

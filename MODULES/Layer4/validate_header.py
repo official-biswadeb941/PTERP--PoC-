@@ -16,7 +16,7 @@ except ImportError:
 
 
 class HeaderSkeptic:
-    HEADER_FORMAT = "!BBBB24sQI"
+    HEADER_FORMAT = "!BBBB24sQII"
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
     EXPECTED_MAGIC = 0xAB
     EXPECTED_VERSION = 0x01
