@@ -30,12 +30,17 @@ from collections import OrderedDict
 from threading import RLock
 from typing import Optional, Any, Dict, Tuple
 
+from sw_arq.arq import Sender  # Imported from core.py
 from .validate_header import HeaderSkeptic
 
+DEFAULT_WINDOW_SIZE = 8
+INITIAL_TTL_MS = 2000
+TTL_ADJUSTMENT_FACTOR = 1.5
+MIN_TTL_MS = 500
+MAX_TTL_MS = 10000
 
 @unique
 class PacketType(IntEnum):
-    # Core
     MESSAGE = 0x01
     HANDSHAKE = 0x02
     HEARTBEAT = 0x03
@@ -43,27 +48,28 @@ class PacketType(IntEnum):
     ERROR = 0x05
     CLOSE = 0x06
 
-    # Control
     PING = 0x20
     PONG = 0x21
     AUTH_REQUEST = 0x22
     AUTH_RESPONSE = 0x23
     SESSION_REKEY = 0x24
 
-    # System/Internal
     METADATA = 0x40
     INTERNAL_COMMAND = 0x41
     LOG = 0x42
 
-    # Custom
     CUSTOM_RESERVED_1 = 0x60
     CUSTOM_RESERVED_2 = 0x61
 
-    # Extensions
     COMPRESSED_MESSAGE = 0x81
     MULTIPLEXED_STREAM = 0x82
     PRIORITY_HIGH = 0x83
     STREAM_FRAGMENT = 0x84
+
+    ARQ_SYN = 0x30
+    ARQ_ACK = 0x31
+    ARQ_NACK = 0x32
+    ARQ_WINDOW_UPDATE = 0x33
 
     @classmethod
     def is_control(cls, value: int) -> bool:
@@ -90,15 +96,12 @@ class PacketType(IntEnum):
     def has_value(cls, value: int) -> bool:
         return value in cls._value2member_map_
 
-
 def compute_hmac(ciphertext: bytes, key: bytes) -> bytes:
     return hmac.new(key, ciphertext, hashlib.sha256).digest()
-
 
 def verify_hmac(ciphertext: bytes, key: bytes, received_hmac: bytes) -> bool:
     expected = compute_hmac(ciphertext, key)
     return hmac.compare_digest(expected, received_hmac)
-
 
 class ReplayProtector:
     def __init__(self, max_entries: int = 5000, max_age: float = 60.0) -> None:
@@ -110,21 +113,18 @@ class ReplayProtector:
     def _purge_expired(self) -> None:
         now = time.time()
         keys_to_delete: list[Tuple[bytes, int]] = []
-
         with self.lock:
             for (nonce, ts), inserted_at in list(self.cache.items()):
                 if now - inserted_at > self.max_age:
                     keys_to_delete.append((nonce, ts))
                 else:
                     break
-
             for key in keys_to_delete:
                 self.cache.pop(key, None)
 
     def seen(self, nonce: bytes, timestamp: int) -> bool:
         key: Tuple[bytes, int] = (nonce, timestamp)
         now = time.time()
-
         with self.lock:
             self._purge_expired()
             if key in self.cache:
@@ -134,13 +134,12 @@ class ReplayProtector:
             self.cache[key] = now
             return False
 
-
 class SecurePacket:
     MAGIC_BYTE = 0xAB
     VERSION = 1
-    HEADER_FORMAT = "!BBBB24sQI"  # magic, version, type, flags, nonce, timestamp, payload_len
+    HEADER_FORMAT = "!BBBB24sQII"  # Added TTL as final int
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
-    HMAC_SIZE = 32  # SHA-256 digest
+    HMAC_SIZE = 32
     replay_protector = ReplayProtector()
 
     def __init__(
@@ -148,6 +147,7 @@ class SecurePacket:
         packet_type: int | PacketType,
         payload: bytes,
         session_key: bytes,
+        sender: Optional[Sender] = None,
         nonce: Optional[bytes] = None,
         compress: bool = False,
         skip_compress: bool = False,
@@ -178,6 +178,13 @@ class SecurePacket:
         self.hmac = compute_hmac(self.ciphertext, self.session_key)
         self.payload = payload
 
+        # Get dynamic TTL if Sender is provided
+        self.ttl_ms = INITIAL_TTL_MS
+        if sender:
+            unacked = len(sender.get_unacked_packets())
+            usage_ratio = unacked / sender.window_size if sender.window_size > 0 else 0
+            self.ttl_ms = int(min(MAX_TTL_MS, max(MIN_TTL_MS, INITIAL_TTL_MS * (1 + usage_ratio))))
+
     def to_bytes(self) -> bytes:
         header = struct.pack(
             self.HEADER_FORMAT,
@@ -187,7 +194,8 @@ class SecurePacket:
             self.flags,
             self.nonce,
             self.timestamp,
-            len(self.ciphertext)
+            len(self.ciphertext),
+            self.ttl_ms
         )
         return header + self.ciphertext + self.hmac
 
@@ -204,7 +212,7 @@ class SecurePacket:
             print(f"[\U0001f9e0 Header Anomaly Detected]\n{validation_notes}\n")
 
         header = data[:cls.HEADER_SIZE]
-        magic, version, packet_type, flags, nonce, timestamp, payload_len = struct.unpack(cls.HEADER_FORMAT, header)
+        magic, version, packet_type, flags, nonce, timestamp, payload_len, ttl_ms = struct.unpack(cls.HEADER_FORMAT, header)
 
         if magic != cls.MAGIC_BYTE:
             raise ValueError(f"Invalid magic byte: {hex(magic)}")
@@ -243,7 +251,7 @@ class SecurePacket:
             except zlib.error:
                 raise ValueError("Decompression failed.")
 
-        return cls(
+        obj = cls(
             packet_type=packet_type,
             payload=payload,
             session_key=session_key,
@@ -252,6 +260,8 @@ class SecurePacket:
             skip_compress=True,
             timestamp=timestamp
         )
+        obj.ttl_ms = ttl_ms  # restore TTL
+        return obj
 
     def get_payload(self) -> bytes:
         return self.payload
@@ -266,4 +276,5 @@ class SecurePacket:
             "length": len(self.payload),
             "nonce": self.nonce.hex(),
             "hmac": self.hmac.hex(),
+            "ttl_ms": self.ttl_ms
         }
