@@ -13,11 +13,13 @@ from MODULES.Layer4.handshake import perform_handshake
 PEER_IP: str = "192.168.1.9"  # 🔧 Set to your peer's IP
 PEER_PORT: int = 6500
 LISTEN_PORT: int = 6501
-MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ " * 1024).encode('utf-8')  # ≈ 1MB
+MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ ").encode('utf-8')  # ≈ 1MB
 
 # === GLOBAL STATE ===
 running = True
 server_socket: Optional[socket.socket] = None
+VERBOSE = True  # 🐛 Toggle verbose output
+total_received_bytes = 0  # 📦 Running byte counter
 
 
 # === SIGNAL HANDLER ===
@@ -66,6 +68,8 @@ def send_packet(ip: str, port: int, message: bytes) -> None:
 
 # === RECEIVER FUNCTION ===
 def receive_packet(conn: socket.socket, addr: str) -> None:
+    global total_received_bytes
+
     try:
         session_key = perform_handshake(conn, addr)
         if not session_key:
@@ -78,7 +82,15 @@ def receive_packet(conn: socket.socket, addr: str) -> None:
             return
 
         packet = SecurePacket.from_bytes(data, session_key)
-        print(f"[📥] Received from {addr}: {packet.get_payload().decode()}")
+        payload = packet.get_payload()
+        payload_size = len(payload)
+        total_received_bytes += payload_size
+
+        if VERBOSE:
+            print(f"[📦] Packet Size from {addr}: {payload_size} bytes ({payload_size / (1024 * 1024):.2f} MB)")
+            print(f"[📊] Total Received: {total_received_bytes} bytes ({total_received_bytes / (1024 * 1024):.2f} MB)")
+
+        print(f"[📥] Received from {addr}: {payload.decode()}")
 
     except Exception as e:
         print(f"[🚨] Packet processing error from {addr}: {e}")
@@ -95,7 +107,7 @@ def server_mode(listen_port: int) -> None:
         s.listen()
         print(f"[🔉] Listening for packets on port {listen_port}...")
 
-        s.settimeout(1.0)  # Let accept() check for shutdown periodically
+        s.settimeout(1.0)
         while running:
             try:
                 conn, addr = s.accept()
