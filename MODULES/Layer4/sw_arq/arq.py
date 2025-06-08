@@ -1,3 +1,8 @@
+"""
+This module implements a simple sliding window ARQ protocol for reliable data transfer.
+It includes both sender and receiver classes that manage packet transmission and acknowledgment.
+"""
+
 from collections import deque
 from typing import Dict, List, Optional, Set, Deque
 

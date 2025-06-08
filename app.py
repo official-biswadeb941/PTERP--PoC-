@@ -6,14 +6,14 @@ import sys
 import types
 from typing import Optional
 
-from MODULES.packet import SecurePacket, PacketType
-from MODULES.handshake import perform_handshake
+from MODULES.Layer4.packet import SecurePacket, PacketType
+from MODULES.Layer4.handshake import perform_handshake
 
 # === CONFIGURATION ===
 PEER_IP: str = "192.168.1.9"  # 🔧 Set to your peer's IP
 PEER_PORT: int = 6500
 LISTEN_PORT: int = 6501
-MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ " * 16384).encode('utf-8')  # ≈ 1MB
+MESSAGE = ("⚡️ This is a Message from PTER Protocol ⚡️ " * 1024).encode('utf-8')  # ≈ 1MB
 
 # === GLOBAL STATE ===
 running = True

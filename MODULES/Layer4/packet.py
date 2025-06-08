@@ -11,6 +11,8 @@ Includes secure packet handling, encryption, decryption, compression, and integr
 # +---------------------------------------------------------------+
 # |        Timestamp (8 bytes)         | Payload Length (4 bytes)  |
 # +------------------------------------+--------------------------+
+# |             TTL (4 bytes, Sliding Window with ARQ)            |
+# +---------------------------------------------------------------+
 # |                Ciphertext (variable, encrypted payload)        |
 # +---------------------------------------------------------------+
 # |               HMAC (32 bytes, SHA-256 of ciphertext)           |
@@ -30,7 +32,7 @@ from collections import OrderedDict
 from threading import RLock
 from typing import Optional, Any, Dict, Tuple
 
-from .sw_arq.arq import Sender  # Imported from core.py
+from .sw_arq.arq import Sender
 from .validate_header import HeaderSkeptic
 
 DEFAULT_WINDOW_SIZE = 8
@@ -203,13 +205,18 @@ class SecurePacket:
         return self.to_bytes().hex()
 
     @classmethod
-    def from_bytes(cls, data: bytes, session_key: bytes) -> 'SecurePacket':
+    def from_bytes(cls, data: bytes, session_key: bytes, strict_validation: bool = True) -> 'SecurePacket':
         if len(data) < cls.HEADER_SIZE + cls.HMAC_SIZE:
             raise ValueError("Invalid packet: too short.")
 
+        # Strict enforcement of header validation
         _, validation_notes = HeaderSkeptic.question_header(data)
         if "✅" not in validation_notes:
-            print(f"[\U0001f9e0 Header Anomaly Detected]\n{validation_notes}\n")
+            error_msg = f"[🧠 Header Anomaly Detected]\n{validation_notes}"
+            if strict_validation:
+                raise ValueError(error_msg)
+            else:
+                print(error_msg)
 
         header = data[:cls.HEADER_SIZE]
         magic, version, packet_type, flags, nonce, timestamp, payload_len, ttl_ms = struct.unpack(cls.HEADER_FORMAT, header)
@@ -260,7 +267,7 @@ class SecurePacket:
             skip_compress=True,
             timestamp=timestamp
         )
-        obj.ttl_ms = ttl_ms  # restore TTL
+        obj.ttl_ms = ttl_ms
         return obj
 
     def get_payload(self) -> bytes:
