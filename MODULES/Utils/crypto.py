@@ -17,16 +17,19 @@ from typing import Optional
 class EphemeralKeyPair:
     """
     Generates and holds an ephemeral Curve25519 keypair.
+    Private key access is protected and requires explicit consent.
     """
     def __init__(self, verbose: bool = False) -> None:
         self._private_key: Optional[PrivateKey] = PrivateKey.generate()
         self.public_key: PublicKey = self._private_key.public_key
 
         if verbose:
-            print("[v] Private Key:", self.get_private_bytes().hex())
+            print("[v] Private Key:", self.export_private_bytes(confirm=True).hex())
             print("[v] Public  Key:", self.get_public_bytes().hex())
 
-    def get_private_bytes(self) -> bytes:
+    def export_private_bytes(self, confirm: bool = False) -> bytes:
+        if not confirm:
+            raise PermissionError("Private key export requires explicit confirmation.")
         return bytes(self._private_key) if self._private_key else b""
 
     def get_public_bytes(self) -> bytes:
@@ -35,9 +38,7 @@ class EphemeralKeyPair:
     def zeroize(self) -> None:
         if self._private_key:
             try:
-                # Convert to mutable bytearray
                 key_bytes = bytearray(bytes(self._private_key))
-                # Use ctypes to zero memory
                 buf = (ctypes.c_char * len(key_bytes)).from_buffer(key_bytes)
                 for i in range(len(buf)):
                     buf[i] = 0
@@ -117,8 +118,16 @@ if __name__ == "__main__":
     bob: EphemeralKeyPair = EphemeralKeyPair(verbose=verbose)
 
     print("[*] Deriving shared secrets...")
-    alice_shared: bytes = derive_shared_secret(alice.get_private_bytes(), bob.get_public_bytes(), verbose=verbose)
-    bob_shared: bytes = derive_shared_secret(bob.get_private_bytes(), alice.get_public_bytes(), verbose=verbose)
+    alice_shared: bytes = derive_shared_secret(
+        alice.export_private_bytes(confirm=True), 
+        bob.get_public_bytes(), 
+        verbose=verbose
+    )
+    bob_shared: bytes = derive_shared_secret(
+        bob.export_private_bytes(confirm=True), 
+        alice.get_public_bytes(), 
+        verbose=verbose
+    )
 
     print("[*] Verifying shared secrets match...")
     assert constant_time_compare(alice_shared, bob_shared), "Shared secrets do not match!"

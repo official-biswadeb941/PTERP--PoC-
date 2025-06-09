@@ -1,0 +1,484 @@
+Biswadeb Mukherjee, Ed.                                      Independent Researcher
+Internet-Draft                                      Ethical Hacker, Pentester, Malware Developer
+Intended status: Experimental                                        6 June 2025
+Expires: 6 December 2025
+
+                   The Post-Trust Ephemeral Relay Protocol (PTER)
+                   draft-mukherjee-pter-protocol-specification-00
+
+Abstract
+
+   The Post-Trust Ephemeral Relay Protocol (PTER) is a fourth-generation, 
+   stateless, memory-only, Layer 4+ messaging protocol designed for 
+   environments where persistence is dangerous, trust is obsolete, and 
+   metadata is weaponized. Built for red teams, covert ops, and memory-resident 
+   tooling, PTER enables encrypted, connection-oriented communication without 
+   sessions, sockets, or forensic residue. Unlike legacy protocols, PTER was 
+   created outside institutional models—by necessity, not consensus. At its 
+   core is Dynamic Ephemeral Transport (DET), a RAM-only, time-bound relay 
+   system that forms and dissolves anonymous links with no trace. This document 
+   outlines PTER as a tactical framework for volatile, anti-forensic communication 
+   in adversarial terrain.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   This document defines an experimental protocol intended for advanced research
+   in volatile, stateless, memory-only transport systems. It is not a standard
+   and has not been endorsed by the IETF.
+
+   This document is published to stimulate discussion and experimentation in
+   the area of post-trust communication mechanisms, particularly in environments
+   where persistence, traceability, and OSI-model or TCP/IP model assumptions break down.
+
+   This Internet-Draft will expire on 6 December 2025.
+
+Copyright Notice
+
+   Copyright (c) 2025 Biswadeb Mukherjee.
+
+   This document is distributed for research and informational purposes only.
+   It may not be reproduced, modified, or used for commercial purposes without
+   explicit permission from the author.
+
+   This document is released under the terms of the PTER Attribution License,
+   Version 1.0. No warranties are provided, and use is at your own risk.
+
+   This document is not an IETF product and does not follow standard submission processes.
+
+   Redistribution of this document must retain attribution to the original author.
+   Code components and diagrams, if extracted, must include this license
+
+
+
+
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 1]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
+
+
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2
+     1.1.  Requirements Language . . . . . . . . . . . . . . . . . .   2
+   2.  Body  . . . . . . . . . . . . . . . . . . . . . . . . . . . .   2
+   3.  List Examples . . . . . . . . . . . . . . . . . . . . . . . .   2
+     3.1.  Simple Unordered (Bullet) List  . . . . . . . . . . . . .   3
+     3.2.  Ordered List With Lowercase Letters in Brackets Instead of
+           Numbers . . . . . . . . . . . . . . . . . . . . . . . . .   3
+     3.3.  Continuous Numbering in a List That is Split by Text or
+           Sections  . . . . . . . . . . . . . . . . . . . . . . . .   3
+       3.3.1.  Section in-between  . . . . . . . . . . . . . . . . .   3
+     3.4.  Definition Lists  . . . . . . . . . . . . . . . . . . . .   3
+     3.5.  Lists With Hanging Labels . . . . . . . . . . . . . . . .   4
+   4.  Tables  . . . . . . . . . . . . . . . . . . . . . . . . . . .   4
+   5.  Source Code Examples  . . . . . . . . . . . . . . . . . . . .   4
+   6.  Adding Diagrams . . . . . . . . . . . . . . . . . . . . . . .   4
+   7.  Using xref  . . . . . . . . . . . . . . . . . . . . . . . . .   5
+   8.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .   5
+   9.  Security Considerations . . . . . . . . . . . . . . . . . . .   5
+   10. References  . . . . . . . . . . . . . . . . . . . . . . . . .   5
+     10.1.  Normative References . . . . . . . . . . . . . . . . . .   5
+     10.2.  Informative References . . . . . . . . . . . . . . . . .   5
+   Appendix A.  Appendix 1 . . . . . . . . . . . . . . . . . . . . .   5
+   Acknowledgements  . . . . . . . . . . . . . . . . . . . . . . . .   5
+   Contributors  . . . . . . . . . . . . . . . . . . . . . . . . . .   5
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .   6
+
+1.  Introduction
+
+   The Post-Trust Ephemeral Relay Protocol (PTER) is a fourth-generation
+   Layer 4+ messaging protocol architected for volatility, statelessness,
+   and operational stealth. PTER reimagines digital communication for 
+   environments where persistence is a liability, trust is obsolete, and 
+   traditional networking assumptions are weaponized by adversaries.
+
+   Unlike conventional transport protocols (e.g., TCP, UDP, QUIC), PTER
+   does not rely on stable sessions, persistent connections, or long-lived 
+   endpoints. It eliminates the concept of durable socket-based exchanges 
+   in favor of single-shot, RAM-resident packet relays that evaporate 
+   upon completion. Messages are never stored on disk and are intentionally 
+   ephemeral by design.
+
+   The protocol is intentionally stateless, self-obscuring, and DPI-resistant.
+   Its behavior mimics benign traffic patterns or camouflages itself within
+   encrypted noise, frustrating deep packet inspection (DPI) and metadata 
+   correlation techniques. It operates at the edge of the OSI model, 
+   collapsing the assumptions of IP continuity, session identifiers, or 
+   symmetric handshakes.
+
+   PTER is intended for use in extreme adversarial environments where 
+   forensic resistance, anonymity, and non-persistence are mandatory—
+   such as during red team operations, covert relay infrastructures, 
+   and memory-only implants.
+
+   This document defines the baseline design and intent of PTER as a 
+   conceptual and experimental relay protocol. It does not mandate any 
+   particular implementation, but offers a blueprint for volatile, 
+   stateless, and trust-agnostic transport mechanisms.
+
+   As part of this blueprint, PTER incorporates a specialized internal 
+   mechanism called Dynamic Ephemeral Transport (DET). DET is responsible 
+   for orchestrating PTER's volatile relay logic by creating temporary, 
+   in-memory links between peers. It is a subcomponent of the PTER protocol 
+   stack and enables stateless, non-durable message routing in high-risk environments.
+
+1.1.  Requirements Language
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in BCP
+   14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+2.  Body
+
+   2.1 Architecture Overview
+      Describe the stateless, RAM-only, ephemeral relay nature.
+      Mention "connection-oriented" without session persistence.
+      Possibly illustrate the communication flow with a diagram later (xref to Section 6).
+
+   2.2 Packet Lifecycle
+      Creation (sender forms a PTER packet) during 
+      Transit (obfuscated relay, disguised metadata)
+      Evaporation (auto-termination post-use, no logs, no traces)
+      
+
+
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 2]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
+
+   2.3 Core Relay Mechanism: Introducing Dynamic Ephemeral Transport (DET)
+       Through the PTER protocol, we introduce a novel communication paradigm 
+       called Dynamic Ephemeral Transport (DET) — a memory-only, stateless, and 
+       time-bound relay mechanism designed to operate in zero-trust, volatile environments. 
+       DET departs from conventional networking topologies by enabling a cooperative, 
+       non-persistent relay mesh that forms dynamically and dissolves autonomously, 
+       with no disk state or centralized coordination. DET is purpose-built for scenarios 
+       where traditional transport-layer assumptions — such as long-lived sessions, 
+       static endpoints, or persistent state — introduce unacceptable security or 
+       forensic risk. Instead, DET offers a fluid, ephemeral relay fabric where 
+       every node both participates and supports, but never persists. DET is not a 
+       standalone protocol but an internal operational construct within the PTER 
+       architecture, enabling volatile message relays in high-risk, zero-trust environments.
+
+      2.3.1. Temporal Peer Linking
+         When a node (e.g., Node A) joins the PTER network, it becomes a volatile participant 
+         in the DET layer. If another node (Node B) joins shortly afterward, the two establish a 
+         temporary, symmetric, in-memory relay binding. This interaction is neither session-based 
+         nor persistent — it is created, used, and dismantled entirely in volatile memory. This 
+         process continues as more nodes arrive, forming a time-sensitive, expanding mesh of 
+         peer-to-peer ephemeral relays.
+      
+      Illustration:
+
+         A <--> B <--> C <--> ... <--> N
+
+         Each node in this chain participates in two-way support with adjacent peers, forming a 
+         decentralized ephemeral relay sequence. No node retains knowledge of the global topology, 
+         and all linkages are automatically expired after transmission, timeout, or disconnect.
+
+      2.3.2. DET Properties and Guarantees
+         The Dynamic Ephemeral Transport layer exhibits the following defining characteristics:
+
+         i.   Volatile Binding: All relay relationships are temporary and RAM-resident only.
+         ii.  Stateless Design: No handshakes, session keys, or socket persistence is maintained.
+         iii. Temporal Locality: Peers form bindings based on arrival time and operational overlap.
+         iv.  Zero Centralization: DET does not rely on static routing, DNS, or any form of global coordination.
+         v.   Bilateral Support: Nodes act both as originators and ephemeral relays simultaneously.
+
+      2.3.3. Anonymity, Obfuscation, and Resilience
+         DET inherently provides the following privacy and stealth benefits:
+
+         i.   Limited Scope Awareness: Each node is only aware of its immediate neighbors; the full relay path is obscured.
+         ii.  No Traceable Artifacts: Because DET never touches disk or persistent memory, forensic recovery is effectively nullified.
+         iii. Traffic Camouflage: Relay behavior can be obfuscated using protocol mimicry, randomized packet timing, 
+         or encrypted padding to resist DPI and behavioral fingerprinting.
+
+      2.3.4. Mathematical Model for DET
+      To analyze the behavior of the Dynamic Ephemeral Transport (DET) mechanism in a formal and simplified manner, 
+      we define a deterministic model of temporal support links within the relay mesh.
+
+      Problem Statement
+
+      In the DET layer, nodes join the ephemeral relay network sequentially over time. Upon joining, each node forms 
+      mutual (bidirectional) volatile support links with its immediate temporal neighbors. This creates a decentralized 
+      chain of in-memory relay relationships that evaporate after use. 
+      The goal is to calculate the total number of such support links given a set of N nodes.
+
+      Definitions
+      Let:
+         N be the total number of nodes currently active in the relay mesh.
+         L(N) be the number of mutual (bidirectional) support links established among them.
+
+      Mathematical Model
+      The number of relay links in the DET network is given by:
+
+      L(N) = N - 1
+
+      This holds under the assumption that:
+
+         The first node establishes no links (it has no predecessor).
+         Each additional node connects to its immediate predecessor upon joining.
+         Each connection is symmetric (i.e., relaying is bidirectional).
+         No long-term memory or state is preserved between nodes.
+
+         | Number of Nodes (N) | Relay Links (L) |
+         | ------------------- | --------------- |
+         | 1                   | 0               |
+         | 2                   | 1               |
+         | 3                   | 2               |
+         | 4                   | 3               |
+         | 5                   | 4               |
+
+         This results in a volatile linear chain topology of the form:
+
+         A <--> B <--> C <--> D <--> E
+
+         Where <--> represents a volatile, bidirectional support link that exists only in memory 
+         and is discarded after message forwarding or timeout.
+
+         Operational Considerations
+         Volatility: All links are RAM-resident and auto-terminated after transmission.
+         Locality: Each node only knows its immediate neighbors.
+         Statelessness: There are no persistent sessions, no routing tables, and no global state.
+         This model allows red team operators and stealth network designers to predict the topological 
+         footprint of a DET mesh at any given moment based on the number of active participants.
+
+
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 3]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
+
+
+3.  List Examples
+
+3.1. Simple Unordered (Bullet) List — Core PTER Attributes
+   Stateless and session less message relaying
+   RAM-only, non-persistent payload handling
+   DPI-resistant packet design and timing jitter
+   Dynamic peer linking based on temporal locality
+   No disk writes, logs, or forensic residue
+
+3.2. Ordered List With Lowercase Letters in Brackets — Operational Use Cases
+   (a) Covert command-and-control (C2) beaconing in zero-trust environments
+   (b) Stealth relaying for memory-only implants
+   (c) Exfiltration tunnels over benign-seeming ephemeral traffic
+   (d) Red team lateral movement via relay chaining
+   (e) Decentralized peer-to-peer communication with anonymity guarantees
+
+3.3. Continuous Numbering — Protocol-Level Requirements
+   REQ1: PTER nodes MUST NOT retain state beyond transmission completion.
+   REQ2: All message payloads MUST be processed in-memory only.
+
+   Some text in between for clarification:
+   These constraints enforce volatility and prevent traceability.
+
+   REQ3: PTER implementations SHOULD implement traffic camouflage (timing, padding, mimicry).
+   REQ4: DET layers MUST support volatile, symmetric peer link formation.
+
+3.3.1. Section in-between — Advanced Operational Requirements
+   REQ5: Nodes MUST operate independently of central coordination (e.g., DNS, bootstrap servers).
+   REQ6: Metadata fields SHOULD be encrypted or obfuscated at transit layer to resist correlation.
+
+3.4. Definition Lists — Terminology Snapshot
+   Ephemeral Relay:
+   A volatile, RAM-only message handoff between two DET-linked nodes.
+
+   Temporal Peer Binding:
+   A short-lived, in-memory connection established between temporally overlapping nodes.
+
+   Camouflage Mode:
+   Behavioral or packet-level mimicry used to evade DPI or behavioral detection heuristics.
+
+
+
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 4]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
+
+
+3.5. Lists With Hanging Labels — Protocol Configuration Parameters
+   max_lifetime
+   Maximum time (in milliseconds) a relay binding is maintained before expiry.
+
+   obfuscation_mode
+   Enables protocol mimicry strategies (e.g., mimic HTTP/2, DNS, or QUIC traffic).
+
+   memory_residency_threshold
+   Defines how long message content can reside in memory before forced purge.
+
+
+
+4.  Tables
+
+                +==============+=============+============+
+                | Column 1     | Column 2    | Column 3   |
+                +==============+=============+============+
+                | Left cell    | Colspan cell             |
+                +--------------+-------------+------------+
+                | Rowspan cell | Center cell | Right cell |
+                |              +-------------+------------+
+                |              | Cell        | Cell       |
+                +--------------+-------------+------------+
+                | Colspan footer                          |
+                +-----------------------------------------+
+
+                                  Table 1
+
+5.  Source Code Examples
+
+   This is an example C program
+
+   <CODE BEGINS> file "helloworld.c"
+
+   #include <stdio.h>
+
+   int main() {
+     printf("Hello World");
+     return 0;
+   }
+
+   <CODE ENDS>
+
+6.  Adding Diagrams
+
+    +--------+
+    | A box  |
+    +--------+
+
+                              Figure 1: A Box
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 5]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
+
+
+7.  Using xref
+
+   A reference to Section 6
+
+   A reference to Section 2 of [RFC8174]
+
+8.  IANA Considerations
+
+   This memo includes no request to IANA.
+
+9.  Security Considerations
+
+   This document should not affect the security of the Internet.
+
+10.  References
+
+10.1.  Normative References
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/info/rfc8174>.
+
+10.2.  Informative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
+   [exampleRefMin]
+              Surname, Initials., "Title", 2006.
+
+   [exampleRefOrg]
+              Organization, "Title", 1984, <http://www.example.com/>.
+
+Appendix A.  Appendix 1
+
+   This becomes an Appendix
+
+Acknowledgements
+
+   This template uses extracts from templates written by Pekka Savola,
+   Elwyn Davies and Henrik Levkowetz.
+
+Contributors
+
+   Thanks to all of the contributors.
+
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 6]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
+
+
+   Biswadeb Mukherjee
+   Ethical Hacker, Pentester, Malware Developer
+   Email: biswadebmukherjee941@gmail.com
+
+
+Author's Address
+
+   Biswadeb Mukherjee
+   Ethical Hacker, Pentester, Malware Developer
+   Sodepur
+   Kolkata
+   Phone: 9836763466
+   Email: biswadebmukherjee941@gmail.com
+   URI:   https://www.linkedin.com/in/biswadeb-mukherjee/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mukherjee                 Expires 6 December 2025               [Page 1]
+
+Internet-Draft        Post-Trust Ephemeral Relay Protocol       June 2025
