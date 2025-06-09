@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Standalone crypto module for PTER Protocol.
 Ephemeral key generation, shared secret derivation, encryption utilities.
@@ -11,6 +10,7 @@ from nacl.exceptions import CryptoError
 from nacl.utils import random
 import hmac
 import hashlib
+import ctypes
 from typing import Optional
 
 
@@ -33,8 +33,18 @@ class EphemeralKeyPair:
         return bytes(self.public_key)
 
     def zeroize(self) -> None:
-        del self._private_key
-        self._private_key = None
+        if self._private_key:
+            try:
+                # Convert to mutable bytearray
+                key_bytes = bytearray(bytes(self._private_key))
+                # Use ctypes to zero memory
+                buf = (ctypes.c_char * len(key_bytes)).from_buffer(key_bytes)
+                for i in range(len(buf)):
+                    buf[i] = 0
+            except Exception as e:
+                print("[-] Zeroization failed:", str(e))
+            finally:
+                self._private_key = None
 
 
 def derive_shared_secret(private_key: bytes, peer_public_key: bytes, verbose: bool = False) -> bytes:
@@ -62,7 +72,7 @@ def decrypt(ciphertext: bytes, shared_key: bytes, verbose: bool = False) -> byte
     try:
         decrypted: bytes = box.decrypt(ciphertext)
         if verbose:
-            print("[v] Decrypted Message:", decrypted.decode(errors="ignore"))
+            print("[v] Decrypted Message (hex):", decrypted.hex())
         return decrypted
     except CryptoError:
         raise ValueError("Decryption failed")
@@ -79,6 +89,8 @@ def hkdf_derive(
     length: int = 32,
     verbose: bool = False
 ) -> bytes:
+    if not salt:
+        raise ValueError("Salt must not be empty for HKDF")
     prk: bytes = hmac.new(salt, key_material, hashlib.sha256).digest()
     okm: bytes = b""
     prev: bytes = b""
